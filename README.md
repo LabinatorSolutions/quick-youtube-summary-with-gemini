@@ -2,7 +2,7 @@
 
 A Firefox extension that summarizes YouTube videos using Google Gemini. Customize your prompts and get instant insights without leaving your flow.
 
-[![Firefox Add-on](https://img.shields.io/badge/Firefox_Add--on-Coming_Soon-lightgrey.svg)](https://addons.mozilla.org/en-US/firefox/addon/quick-youtube-summary-with-gemini/)
+[![Firefox Add-on](https://img.shields.io/badge/Firefox_Add--on-Get_It_Now-blue.svg)](https://addons.mozilla.org/en-US/firefox/addon/quick-youtube-summary-with-gemini/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 ## Purpose
