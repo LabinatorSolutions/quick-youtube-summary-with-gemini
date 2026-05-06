@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
+  <!-- Play triangle -->
+  <polygon points="16,36 16,86 52,61" fill="white"/>
+  <!-- Document lines -->
+  <rect x="62" y="38" width="50" height="9" rx="4.5" fill="white"/>
+  <rect x="62" y="55" width="42" height="9" rx="4.5" fill="white"/>
+  <rect x="62" y="72" width="46" height="9" rx="4.5" fill="white"/>
+  <rect x="62" y="89" width="36" height="9" rx="4.5" fill="white"/>
+</svg>

@@ -133,11 +133,23 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .button-group {
       display: flex;
       gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 400px) {
+      .button-group {
+        width: 100%;
+      }
+      button {
+        flex: 1;
+      }
     }
 
     button {

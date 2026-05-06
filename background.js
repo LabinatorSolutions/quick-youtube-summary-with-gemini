@@ -56,7 +56,11 @@ async function processAndPasteInGemini(urlToProcess) {
         existingTabs[0];
       // Bring tab to front
       await browser.tabs.update(targetTab.id, { active: true });
-      await browser.windows.update(targetTab.windowId, { focused: true });
+      try {
+        await browser.windows.update(targetTab.windowId, { focused: true });
+      } catch {
+        // browser.windows not available on Firefox Android — skip silently
+      }
     } else {
       targetTab = await browser.tabs.create({ url: "https://gemini.google.com/app" });
     }
@@ -129,42 +133,47 @@ browser.action.onClicked.addListener(async (initiatingTab) => {
   const isYoutube = youtubePatterns.some(pattern => pattern.test(currentTabUrl));
   if (!isYoutube) {
     console.warn("Quick YouTube Summary with Gemini: Current tab is not a YouTube video. Action aborted.");
-    // Show a brief badge to give the user visible feedback
-    await browser.action.setBadgeText({ text: '!', tabId: initiatingTab.id });
-    await browser.action.setBadgeBackgroundColor({ color: '#EF4444', tabId: initiatingTab.id });
-    // Use alarms instead of setTimeout — survives event page suspension
-    await browser.alarms.create(`clearBadge-${initiatingTab.id}`, { when: Date.now() + 3000 });
+    // Show a brief badge to give the user visible feedback (not available on Firefox Android)
+    if (browser.action.setBadgeText) {
+      await browser.action.setBadgeText({ text: '!', tabId: initiatingTab.id });
+      await browser.action.setBadgeBackgroundColor({ color: '#EF4444', tabId: initiatingTab.id });
+      // Use alarms instead of setTimeout — survives event page suspension
+      await browser.alarms.create(`clearBadge-${initiatingTab.id}`, { when: Date.now() + 3000 });
+    }
     return;
   }
 
   await processAndPasteInGemini(currentTabUrl);
 });
 
-// Create context menu item
+// Create context menu item (not available on Firefox Android)
 browser.runtime.onInstalled.addListener(() => {
+  if (!browser.contextMenus) return;
   browser.contextMenus.create({
     id: "summarize-with-gemini",
     title: "Summarize with Gemini",
     contexts: ["link"],
-    targetUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"] // Only for YouTube links
+    targetUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"]
   });
   browser.contextMenus.create({
     id: "summarize-with-gemini-page",
     title: "Summarize with Gemini",
     contexts: ["page"],
-    documentUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"] // Only for YouTube pages
+    documentUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"]
   });
 });
 
-// Listener for context menu item click
-browser.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "summarize-with-gemini") {
-    if (info.linkUrl) {
-      await processAndPasteInGemini(info.linkUrl);
+// Listener for context menu item click (not available on Firefox Android)
+if (browser.contextMenus) {
+  browser.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === "summarize-with-gemini") {
+      if (info.linkUrl) {
+        await processAndPasteInGemini(info.linkUrl);
+      }
+    } else if (info.menuItemId === "summarize-with-gemini-page") {
+      if (info.pageUrl) {
+        await processAndPasteInGemini(info.pageUrl);
+      }
     }
-  } else if (info.menuItemId === "summarize-with-gemini-page") {
-    if (info.pageUrl) {
-      await processAndPasteInGemini(info.pageUrl);
-    }
-  }
-});
+  });
+}
