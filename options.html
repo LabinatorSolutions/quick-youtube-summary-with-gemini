@@ -133,22 +133,44 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
+      flex-wrap: wrap-reverse;
+      gap: 16px;
     }
 
     .button-group {
       display: flex;
       gap: 12px;
-      flex-wrap: wrap;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 540px) {
+      body {
+        padding: 20px 12px;
+      }
+      .card {
+        padding: 20px;
+      }
+      .footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+      .button-group {
+        justify-content: center;
+        width: 100%;
+      }
+      .status {
+        justify-content: center;
+        text-align: center;
+      }
     }
 
     @media (max-width: 400px) {
       .button-group {
-        width: 100%;
+        flex-direction: column-reverse;
       }
       button {
-        flex: 1;
+        width: 100%;
       }
     }
 

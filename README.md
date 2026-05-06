@@ -74,7 +74,7 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
 
 1. Ensure you are currently viewing a valid YouTube video (`youtube.com/watch?v=...` or `youtu.be/...`).
 2. Check if you are logged into Gemini.
-3. If Gemini is stuck loading, refresh the Gemini tab. The extension waits up to 10 seconds for the interface to load before timing out.
+3. The extension navigates Gemini to a fresh page and waits up to 10 seconds for the interface to load. If Gemini is slow to start, wait a moment and try again.
 
 ## Privacy Policy
 
@@ -92,11 +92,11 @@ The extension requests:
 | Permission                                | Purpose                                            |
 | ----------------------------------------- | -------------------------------------------------- |
 | `activeTab`                               | Read the current YouTube tab URL                   |
-| `storage`                                 | Save your custom prompt                            |
-| `scripting`                               | Inject the interaction script into Gemini          |
+| `storage`                                 | Save your custom prompt and pass it to Gemini      |
+| `tabs`                                    | Find and switch to an existing Gemini tab          |
+| `notifications`                           | Show error feedback (e.g. not a YouTube page)      |
 | `contextMenus`                            | Add the right-click option (desktop only)          |
-| `alarms`                                  | Clear the toolbar badge after a timeout            |
-| `https://gemini.google.com/*`             | Interact with the Gemini UI and find existing tabs |
+| `https://gemini.google.com/*`             | Find existing Gemini tabs and navigate to them     |
 
 ## 🛠️ Development
 

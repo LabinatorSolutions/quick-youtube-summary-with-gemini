@@ -1,136 +1,72 @@
-const pendingSummaries = new Map();
+const youtubePatterns = [
+  /^https?:\/\/([a-zA-Z0-9-]+\.)?youtube\.com\/watch\?/,
+  /^https?:\/\/youtu\.be\//,
+  /^https?:\/\/([a-zA-Z0-9-]+\.)?youtube\.com\/shorts\//
+];
 
-async function executeAndSendMessage(tabId, textToPaste) {
-  try {
-    // Probe: if the message listener is already alive, skip re-injection.
-    // Without this, the guard flag in content.js blocks the second summarization silently.
-    try {
-      await browser.tabs.sendMessage(tabId, { action: "ping" });
-    } catch {
-      // No listener — inject a fresh copy of content.js
-      await browser.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['content.js']
-      });
-    }
-
-    try {
-      const response = await browser.tabs.sendMessage(tabId, {
-        action: "pasteUrlToActiveElement",
-        textToPaste: textToPaste
-      });
-      if (response && response.success) {
-        console.log("Quick YouTube Summary with Gemini: Successfully started summarization.");
-      } else {
-        console.warn("Quick YouTube Summary with Gemini: Content script reported pasting was not successful.", response ? response.reason : "No response details.");
-      }
-    } catch (error) {
-      console.error(`Quick YouTube Summary with Gemini: Error sending message to Gemini tab ${tabId}:`, error);
-    }
-  } catch (error) {
-    if (error.message && (error.message.includes("No tab with id") || error.message.includes("Receiving end does not exist"))) {
-      console.warn(`Quick YouTube Summary with Gemini: Gemini tab (ID: ${tabId}) was closed or navigated away before action could complete.`);
-    } else {
-      console.error(`Quick YouTube Summary with Gemini: Error injecting script or sending message to Gemini tab ${tabId}:`, error);
-    }
-  }
+function notify(id, message) {
+  if (!browser.notifications) return;
+  browser.notifications.create(id, {
+    type: 'basic',
+    iconUrl: 'icon.svg',
+    title: 'Quick YouTube Summary with Gemini',
+    message
+  });
 }
 
-async function processAndPasteInGemini(urlToProcess) {
-  if (!urlToProcess) {
-    console.error("Quick YouTube Summary with Gemini: No URL provided for processing.");
-    return;
-  }
+async function summarize(url) {
+  const { promptText = defaultPromptText } = await browser.storage.local.get({ promptText: defaultPromptText });
+  await browser.storage.local.set({ pendingPaste: `${url}\n\n${promptText}` });
 
-  const storageData = await browser.storage.local.get({ promptText: defaultPromptText });
-  const textToPaste = `${urlToProcess}\n\n${storageData.promptText}`;
-
-  let targetTab;
-
-  try {
-    const existingTabs = await browser.tabs.query({ url: "https://gemini.google.com/*" });
-    if (existingTabs.length > 0) {
-      // Prefer a fully-loaded base app tab; fall back to any complete tab, then first available.
-      // host_permissions on gemini.google.com satisfies the URL filter — no extra "tabs" perm needed.
-      targetTab =
-        existingTabs.find(t => t.status === 'complete' && t.url === 'https://gemini.google.com/app') ??
-        existingTabs.find(t => t.status === 'complete') ??
-        existingTabs[0];
-      // Bring tab to front
-      await browser.tabs.update(targetTab.id, { active: true });
-      try {
-        await browser.windows.update(targetTab.windowId, { focused: true });
-      } catch {
-        // browser.windows not available on Firefox Android — skip silently
-      }
-    } else {
-      targetTab = await browser.tabs.create({ url: "https://gemini.google.com/app" });
-    }
-  } catch (error) {
-    console.error("Quick YouTube Summary with Gemini: Error finding or opening Gemini tab:", error);
-    return;
-  }
-
-  if (!targetTab || !targetTab.id) {
-    console.error("Quick YouTube Summary with Gemini: Failed to acquire Gemini tab or get its ID.");
-    return;
-  }
-
-  if (targetTab.status === 'complete') {
-    await executeAndSendMessage(targetTab.id, textToPaste);
+  const tabs = await browser.tabs.query({ url: "https://gemini.google.com/*" });
+  if (tabs.length > 0) {
+    const tab = tabs[0];
+    await browser.tabs.update(tab.id, { url: "https://gemini.google.com/app", active: true });
+    try { await browser.windows.update(tab.windowId, { focused: true }); } catch {}
   } else {
-    pendingSummaries.set(targetTab.id, textToPaste);
+    await browser.tabs.create({ url: "https://gemini.google.com/app" });
   }
 }
 
-// Filter to Gemini tabs only — avoids map lookup on every tab load in the browser
-browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-  if (changeInfo.status === 'complete' && pendingSummaries.has(tabId)) {
-    const textToPaste = pendingSummaries.get(tabId);
-    pendingSummaries.delete(tabId);
-    await executeAndSendMessage(tabId, textToPaste);
+browser.action.onClicked.addListener(async (tab) => {
+  let url = tab?.url;
+  if (!url) {
+    const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+    url = active?.url;
   }
-}, { urls: ['https://gemini.google.com/*'] });
 
-browser.tabs.onRemoved.addListener((tabId) => {
-  pendingSummaries.delete(tabId);
+  if (!url) {
+    notify('url-error', 'Could not detect the current page URL.');
+    return;
+  }
+
+  if (!youtubePatterns.some(p => p.test(url))) {
+    notify('not-youtube', 'This is not a YouTube video page.');
+    return;
+  }
+
+  await summarize(url);
 });
 
-// Listener for popup messages
-browser.runtime.onMessage.addListener((message) => {
-  if (message.action === 'summarize' && message.url) {
-    processAndPasteInGemini(message.url);
-  }
-});
-
-// Create context menu item (not available on Firefox Android)
 browser.runtime.onInstalled.addListener(() => {
   if (!browser.contextMenus) return;
   browser.contextMenus.create({
-    id: "summarize-with-gemini",
+    id: "summarize-link",
     title: "Summarize with Gemini",
     contexts: ["link"],
     targetUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"]
   });
   browser.contextMenus.create({
-    id: "summarize-with-gemini-page",
+    id: "summarize-page",
     title: "Summarize with Gemini",
     contexts: ["page"],
     documentUrlPatterns: ["*://*.youtube.com/watch*", "*://youtu.be/*", "*://*.youtube.com/shorts/*"]
   });
 });
 
-// Listener for context menu item click (not available on Firefox Android)
 if (browser.contextMenus) {
-  browser.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId === "summarize-with-gemini") {
-      if (info.linkUrl) {
-        await processAndPasteInGemini(info.linkUrl);
-      }
-    } else if (info.menuItemId === "summarize-with-gemini-page") {
-      if (info.pageUrl) {
-        await processAndPasteInGemini(info.pageUrl);
-      }
-    }
+  browser.contextMenus.onClicked.addListener(async (info) => {
+    const url = info.linkUrl || info.pageUrl;
+    if (url) await summarize(url);
   });
 }
