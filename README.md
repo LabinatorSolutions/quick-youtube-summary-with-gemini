@@ -23,11 +23,11 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
 - ✅ **Smart Tab Management** - Reuses your existing Gemini tab instead of opening a new one every time.
 - ✅ **Robust DOM Interaction** - Reliable polling mechanism to interact with Gemini's rich-text interface.
 - ✅ **Privacy First** - Everything stays local. No telemetry, no external API calls, just native browser APIs.
-- ✅ **Lightweight** - Minimal background footprint utilizing Manifest V3 service workers.
+- ✅ **Lightweight** - Minimal background footprint utilizing a non-persistent Manifest V3 background script.
 
 ## Installation
 
-### Firefox Desktop
+### Firefox Desktop & Android
 
 1. **Download the Extension**
    - [**Download from Mozilla Add-ons (Recommended)**](https://addons.mozilla.org/en-US/firefox/addon/quick-yt-summary-with-gemini/)
@@ -38,7 +38,7 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
    cd quick-youtube-summary-with-gemini
    ```
 
-2. **Load as Temporary Add-on** (for development/testing)
+2. **Load as Temporary Add-on** (desktop, for development/testing)
    - Open Firefox
    - Navigate to `about:debugging#/runtime/this-firefox`
    - Click "Load Temporary Add-on"
@@ -51,8 +51,8 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
    - Open any YouTube video.
 
 2. **Summarize**
-   - Click the extension icon in your toolbar, OR
-   - Right-click anywhere on the page and select "Summarize with Gemini".
+   - Click the extension icon in your toolbar (or browser menu on Android), OR
+   - Right-click anywhere on the page and select "Summarize with Gemini" (desktop only).
 
 3. **Enjoy the Magic**
    - The extension will automatically switch to your Gemini tab (or open one if it doesn't exist).
@@ -94,7 +94,8 @@ The extension requests:
 | `activeTab`                               | Read the current YouTube tab URL                   |
 | `storage`                                 | Save your custom prompt                            |
 | `scripting`                               | Inject the interaction script into Gemini          |
-| `contextMenus`                            | Add the right-click option                         |
+| `contextMenus`                            | Add the right-click option (desktop only)          |
+| `alarms`                                  | Clear the toolbar badge after a timeout            |
 | `https://gemini.google.com/*`             | Interact with the Gemini UI and find existing tabs |
 
 ## 🛠️ Development
@@ -104,12 +105,12 @@ The extension requests:
 ```text
 quick-youtube-summary-with-gemini/
 ├── manifest.json                    # Extension configuration
-├── background.js                    # Background service worker
+├── background.js                    # Background script (non-persistent event page)
 ├── content.js                       # Content script for Gemini DOM interaction
 ├── config.js                        # Default prompt text
 ├── options.html                     # Options page UI
 ├── options.js                       # Options page logic
-├── icons/                           # Extension icons
+├── icon.svg                         # Extension icon (all sizes)
 └── README.md                        # This file
 ```
 
