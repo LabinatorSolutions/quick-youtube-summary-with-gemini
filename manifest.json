@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Quick YouTube Summary with Gemini",
-  "version": "1.2",
+  "version": "1.3",
   "author": "Labinator",
   "developer": {
     "name": "Labinator",
