@@ -10,9 +10,7 @@
   "description": "Summarizes the Youtube video using Google Gemini",
   "permissions": [
     "activeTab",
-    "alarms",
     "contextMenus",
-    "notifications",
     "scripting",
     "storage"
   ],
@@ -21,6 +19,7 @@
   ],
   "action": {
     "default_title": "Summarize with Gemini",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon.svg",
       "48": "icon.svg",

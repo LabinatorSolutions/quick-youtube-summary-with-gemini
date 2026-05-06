@@ -96,49 +96,11 @@ browser.tabs.onRemoved.addListener((tabId) => {
   pendingSummaries.delete(tabId);
 });
 
-// Clear "!" badge via alarm — setTimeout is unreliable in non-persistent event pages
-browser.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name.startsWith('clearBadge-')) {
-    const tabId = parseInt(alarm.name.split('-')[1], 10);
-    browser.action.setBadgeText({ text: '', tabId });
+// Listener for popup messages
+browser.runtime.onMessage.addListener((message) => {
+  if (message.action === 'summarize' && message.url) {
+    processAndPasteInGemini(message.url);
   }
-});
-
-// Listener for browser action (toolbar icon)
-browser.action.onClicked.addListener(async (initiatingTab) => {
-  const currentTabUrl = initiatingTab?.url;
-
-  if (!currentTabUrl) {
-    console.error("Quick YouTube Summary with Gemini: Could not get current tab URL.");
-    return;
-  }
-
-  // Only proceed if the URL is a YouTube video link
-  const youtubePatterns = [
-    /^https?:\/\/([a-zA-Z0-9-]+\.)?youtube\.com\/watch\?/, // youtube.com/watch
-    /^https?:\/\/youtu\.be\//,                             // youtu.be short links
-    /^https?:\/\/([a-zA-Z0-9-]+\.)?youtube\.com\/shorts\// // youtube.com/shorts
-  ];
-
-  const isYoutube = youtubePatterns.some(pattern => pattern.test(currentTabUrl));
-  if (!isYoutube) {
-    console.warn("Quick YouTube Summary with Gemini: Current tab is not a YouTube video. Action aborted.");
-    if (browser.action.setBadgeText) {
-      await browser.action.setBadgeText({ text: '!', tabId: initiatingTab.id });
-      await browser.action.setBadgeBackgroundColor({ color: '#EF4444', tabId: initiatingTab.id });
-      await browser.alarms.create(`clearBadge-${initiatingTab.id}`, { when: Date.now() + 3000 });
-    } else {
-      browser.notifications?.create('not-youtube', {
-        type: 'basic',
-        iconUrl: 'icon.svg',
-        title: 'Quick YouTube Summary with Gemini',
-        message: 'Navigate to a YouTube video first.'
-      });
-    }
-    return;
-  }
-
-  await processAndPasteInGemini(currentTabUrl);
 });
 
 // Create context menu item (not available on Firefox Android)
