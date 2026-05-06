@@ -1,3 +1,5 @@
+const pendingSummaries = new Map();
+
 async function executeAndSendMessage(tabId, textToPaste) {
   try {
     // Probe: if the message listener is already alive, skip re-injection.
@@ -77,33 +79,21 @@ async function processAndPasteInGemini(urlToProcess) {
   if (targetTab.status === 'complete') {
     await executeAndSendMessage(targetTab.id, textToPaste);
   } else {
-    // Store in session storage to handle tab load asynchronously (robust against SW suspension)
-    const { pendingSummaries = {} } = await browser.storage.session.get('pendingSummaries');
-    pendingSummaries[targetTab.id] = textToPaste;
-    await browser.storage.session.set({ pendingSummaries });
+    pendingSummaries.set(targetTab.id, textToPaste);
   }
 }
 
-// Global listeners for tab updates to handle pending summaries
-// Filter to Gemini tabs only — avoids storage.session read on every tab load in the browser
-browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') {
-    const { pendingSummaries = {} } = await browser.storage.session.get('pendingSummaries');
-    if (pendingSummaries[tabId]) {
-      const textToPaste = pendingSummaries[tabId];
-      delete pendingSummaries[tabId];
-      await browser.storage.session.set({ pendingSummaries });
-      await executeAndSendMessage(tabId, textToPaste);
-    }
+// Filter to Gemini tabs only — avoids map lookup on every tab load in the browser
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (changeInfo.status === 'complete' && pendingSummaries.has(tabId)) {
+    const textToPaste = pendingSummaries.get(tabId);
+    pendingSummaries.delete(tabId);
+    await executeAndSendMessage(tabId, textToPaste);
   }
 }, { urls: ['https://gemini.google.com/*'] });
 
-browser.tabs.onRemoved.addListener(async (tabId) => {
-  const { pendingSummaries = {} } = await browser.storage.session.get('pendingSummaries');
-  if (pendingSummaries[tabId]) {
-    delete pendingSummaries[tabId];
-    await browser.storage.session.set({ pendingSummaries });
-  }
+browser.tabs.onRemoved.addListener((tabId) => {
+  pendingSummaries.delete(tabId);
 });
 
 // Clear "!" badge via alarm — setTimeout is unreliable in non-persistent event pages
@@ -133,12 +123,17 @@ browser.action.onClicked.addListener(async (initiatingTab) => {
   const isYoutube = youtubePatterns.some(pattern => pattern.test(currentTabUrl));
   if (!isYoutube) {
     console.warn("Quick YouTube Summary with Gemini: Current tab is not a YouTube video. Action aborted.");
-    // Show a brief badge to give the user visible feedback (not available on Firefox Android)
     if (browser.action.setBadgeText) {
       await browser.action.setBadgeText({ text: '!', tabId: initiatingTab.id });
       await browser.action.setBadgeBackgroundColor({ color: '#EF4444', tabId: initiatingTab.id });
-      // Use alarms instead of setTimeout — survives event page suspension
       await browser.alarms.create(`clearBadge-${initiatingTab.id}`, { when: Date.now() + 3000 });
+    } else {
+      browser.notifications?.create('not-youtube', {
+        type: 'basic',
+        iconUrl: 'icon.svg',
+        title: 'Quick YouTube Summary with Gemini',
+        message: 'Navigate to a YouTube video first.'
+      });
     }
     return;
   }
