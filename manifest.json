@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Quick YouTube Summary with Gemini",
-  "version": "1.5",
+  "version": "1.6",
   "author": "Labinator",
   "developer": {
     "name": "Labinator",
@@ -10,6 +10,7 @@
   "description": "Summarizes the Youtube video using Google Gemini",
   "permissions": [
     "activeTab",
+    "contextMenus",
     "notifications",
     "storage",
     "tabs"
@@ -22,10 +23,7 @@
     }
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://youtu.be/*",
-    "*://gemini.google.com/*",
-    "*://*.google.com/*"
+    "https://gemini.google.com/*"
   ],
   "action": {
     "default_title": "Summarize with Gemini",

@@ -16,20 +16,31 @@ function notify(id, message) {
 
 async function summarize(url) {
   const { promptText = defaultPromptText } = await browser.storage.local.get({ promptText: defaultPromptText });
-  await browser.storage.local.set({ pendingPaste: `${url}\n\n${promptText}` });
+  const text = `${url}\n\n${promptText}`;
 
   // Reuse a Gemini tab only if it is on the blank home/new-chat view.
   // A tab showing an active thread (/app/<id>) is left untouched so we never
   // destroy an in-progress conversation; open a fresh tab for it instead.
   const tabs = await browser.tabs.query({ url: "https://gemini.google.com/*" });
-  const home = tabs.find(t => /^https:\/\/gemini\.google\.com\/(app\/?)?$/.test(t.url || ""));
+  const home = tabs.find(t => /^https:\/\/gemini\.google\.com\/(app\/?)?(\?.*)?$/.test(t.url || ""));
 
   if (home) {
     await browser.tabs.update(home.id, { active: true });
     try { await browser.windows.update(home.windowId, { focused: true }); } catch {}
-  } else {
-    await browser.tabs.create({ url: "https://gemini.google.com/app" });
+    try {
+      // Message the reused tab directly so only it pastes; a storage
+      // broadcast would also wake content scripts in active-thread tabs.
+      await browser.tabs.sendMessage(home.id, { type: "pastePrompt", text });
+      return;
+    } catch {
+      // Content script unreachable (tab predates install/update); fall
+      // through and hand off via storage to a fresh tab instead.
+    }
   }
+
+  // Fresh tab: queue the prompt first so the content script finds it on load.
+  await browser.storage.local.set({ pendingPaste: text, pendingPasteAt: Date.now() });
+  await browser.tabs.create({ url: "https://gemini.google.com/app" });
 }
 
 browser.action.onClicked.addListener(async (tab) => {

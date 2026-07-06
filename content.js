@@ -13,13 +13,9 @@ function poll(fn, maxAttempts, intervalMs) {
 
 let handling = false;
 
-async function tryPastePrompt() {
-  if (handling) return;
-  const { pendingPaste } = await browser.storage.local.get('pendingPaste');
-  if (!pendingPaste) return;
-
+async function pastePrompt(text) {
+  if (handling || !text) return;
   handling = true;
-  await browser.storage.local.remove('pendingPaste');
 
   const input = await poll(() => document.querySelector(
     'rich-textarea div[contenteditable="true"], ' +
@@ -37,7 +33,7 @@ async function tryPastePrompt() {
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(range);
-  document.execCommand('insertText', false, pendingPaste);
+  document.execCommand('insertText', false, text);
   input.dispatchEvent(new Event('input', { bubbles: true }));
 
   // Leave the prompt filled and focused; the user reviews, edits, and sends it.
@@ -45,10 +41,22 @@ async function tryPastePrompt() {
   handling = false;
 }
 
-// Fresh tab: content script loads after the prompt is queued, handled here.
-tryPastePrompt();
-
-// Reused (already-open) tab: no reload fires, so react to the storage write.
-browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.pendingPaste?.newValue) tryPastePrompt();
+// Reused (already-open) tab: background messages this exact tab, so content
+// scripts in other Gemini tabs (active threads) never react.
+browser.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === 'pastePrompt') pastePrompt(msg.text);
 });
+
+// Fresh tab: content script loads after the prompt was queued in storage.
+(async () => {
+  const { pendingPaste, pendingPasteAt = 0 } =
+    await browser.storage.local.get(['pendingPaste', 'pendingPasteAt']);
+  if (!pendingPaste) return;
+  await browser.storage.local.remove(['pendingPaste', 'pendingPasteAt']);
+
+  // Drop stale handoffs (e.g. the fresh tab was closed before it loaded and
+  // the user opens Gemini much later) so nothing pastes unexpectedly.
+  if (Date.now() - pendingPasteAt > 120000) return;
+
+  pastePrompt(pendingPaste);
+})();
