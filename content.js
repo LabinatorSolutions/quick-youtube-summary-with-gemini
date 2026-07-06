@@ -11,10 +11,14 @@ function poll(fn, maxAttempts, intervalMs) {
   });
 }
 
+let handling = false;
+
 async function tryPastePrompt() {
+  if (handling) return;
   const { pendingPaste } = await browser.storage.local.get('pendingPaste');
   if (!pendingPaste) return;
 
+  handling = true;
   await browser.storage.local.remove('pendingPaste');
 
   const input = await poll(() => document.querySelector(
@@ -25,7 +29,7 @@ async function tryPastePrompt() {
     'textarea'
   ), 50, 200); // 10s max
 
-  if (!input) return;
+  if (!input) { handling = false; return; }
 
   input.focus();
   const range = document.createRange();
@@ -36,20 +40,15 @@ async function tryPastePrompt() {
   document.execCommand('insertText', false, pendingPaste);
   input.dispatchEvent(new Event('input', { bubbles: true }));
 
-  const button = await poll(() => {
-    const btn = document.querySelector(
-      'button[aria-label*="Send"], button[aria-label*="Submit"], button.send-button'
-    );
-    return btn && !btn.disabled ? btn : null;
-  }, 15, 200); // 3s max
-
-  if (button) {
-    button.click();
-  } else {
-    const opts = { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, composed: true };
-    input.dispatchEvent(new KeyboardEvent('keydown', opts));
-    input.dispatchEvent(new KeyboardEvent('keyup', opts));
-  }
+  // Leave the prompt filled and focused; the user reviews, edits, and sends it.
+  sel.collapseToEnd();
+  handling = false;
 }
 
+// Fresh tab: content script loads after the prompt is queued, handled here.
 tryPastePrompt();
+
+// Reused (already-open) tab: no reload fires, so react to the storage write.
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.pendingPaste?.newValue) tryPastePrompt();
+});

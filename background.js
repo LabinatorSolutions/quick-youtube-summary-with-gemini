@@ -18,11 +18,15 @@ async function summarize(url) {
   const { promptText = defaultPromptText } = await browser.storage.local.get({ promptText: defaultPromptText });
   await browser.storage.local.set({ pendingPaste: `${url}\n\n${promptText}` });
 
+  // Reuse a Gemini tab only if it is on the blank home/new-chat view.
+  // A tab showing an active thread (/app/<id>) is left untouched so we never
+  // destroy an in-progress conversation; open a fresh tab for it instead.
   const tabs = await browser.tabs.query({ url: "https://gemini.google.com/*" });
-  if (tabs.length > 0) {
-    const tab = tabs[0];
-    await browser.tabs.update(tab.id, { url: "https://gemini.google.com/app", active: true });
-    try { await browser.windows.update(tab.windowId, { focused: true }); } catch {}
+  const home = tabs.find(t => /^https:\/\/gemini\.google\.com\/(app\/?)?$/.test(t.url || ""));
+
+  if (home) {
+    await browser.tabs.update(home.id, { active: true });
+    try { await browser.windows.update(home.windowId, { focused: true }); } catch {}
   } else {
     await browser.tabs.create({ url: "https://gemini.google.com/app" });
   }
