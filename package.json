@@ -1,0 +1,24 @@
+{
+  "name": "quick-youtube-summary-with-gemini",
+  "version": "1.7.0",
+  "private": true,
+  "description": "Firefox extension that sends the current YouTube video to Google Gemini with a customizable prompt.",
+  "license": "AGPL-3.0-or-later",
+  "author": "Labinator (https://labinator.com/)",
+  "homepage": "https://github.com/LabinatorSolutions/quick-youtube-summary-with-gemini",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LabinatorSolutions/quick-youtube-summary-with-gemini.git"
+  },
+  "scripts": {
+    "lint": "biome check . && web-ext lint",
+    "lint:fix": "biome check --write . && web-ext lint",
+    "build": "web-ext build",
+    "start": "web-ext run",
+    "sign": "web-ext sign --channel=listed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "web-ext": "^10.6.0"
+  }
+}

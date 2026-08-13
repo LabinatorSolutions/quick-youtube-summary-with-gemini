@@ -6,249 +6,249 @@ Guide for developers who want to modify, improve, or contribute to Quick YouTube
 
 ### Prerequisites
 
-- Firefox Browser (150+)
-- Text editor or IDE (VS Code recommended)
-- Git (for version control)
+- Firefox 153 or newer
+- [Bun](https://bun.sh/) (for the dev tooling only — the extension itself has no runtime dependencies)
+- Git
 - Basic knowledge of:
-  - JavaScript (ES6+)
-  - Browser Extensions (WebExtensions API)
+  - JavaScript (ES2022+)
+  - Browser Extensions (WebExtensions API, Manifest V3)
   - DOM manipulation
 
-### Setting Up Development Environment
+### Setting Up
 
-1. **Clone Repository**
+1. **Clone the repository**
 
    ```bash
    git clone https://github.com/LabinatorSolutions/quick-youtube-summary-with-gemini.git
    cd quick-youtube-summary-with-gemini
    ```
 
-2. **Load Extension in Firefox**
-   - Open Firefox
-   - Navigate to: `about:debugging#/runtime/this-firefox`
+2. **Install the dev tooling**
+
+   ```bash
+   bun install
+   ```
+
+3. **Load the extension in Firefox**
+
+   Either let `web-ext` do it:
+
+   ```bash
+   bun run start
+   ```
+
+   Or load it manually:
+   - Navigate to `about:debugging#/runtime/this-firefox`
    - Click "Load Temporary Add-on"
    - Select `manifest.json`
 
-3. **Open Console**
-   - Navigate to `about:debugging#/runtime/this-firefox`
-   - Click "Inspect" on the extension
-   - Console tab will show background script logs prefixed with `Quick YouTube Summary with Gemini:`
+4. **Open the background console**
+   - `about:debugging#/runtime/this-firefox` → "Inspect" on the extension
+   - The Console tab shows background script output
 
 ## 📁 Project Structure
 
 ```text
 quick-youtube-summary-with-gemini/
-├── manifest.json        # Extension metadata & permissions (MV3)
-├── background.js        # Background service worker — tab management, context menus, alarms
-├── content.js           # Content script injected into gemini.google.com — DOM interaction
-├── config.js            # Default prompt text (shared by background.js and options.js)
-├── options.html         # Options page UI
-├── options.js           # Options page logic — load/save/reset prompt
-└── icons/               # Extension icons (16, 32, 48, 128px)
+├── manifest.json         # Extension metadata & permissions (MV3)
+├── background.js         # Event page — URL validation, tab resolution, handoffs, context menus
+├── content.js            # Content script on gemini.google.com — pastes into the prompt box
+├── config.js             # Default prompt text (shared by background.js and options.js)
+├── options.html          # Options page UI
+├── options.js            # Options page logic — load/save/reset prompt
+├── icon.svg              # Single scalable icon used at every size
+├── package.json          # Dev scripts and dev dependencies (Biome, web-ext)
+├── biome.json            # Linter/formatter configuration
+├── web-ext-config.mjs    # Packaging exclusions (web-ext has no .webextignore support)
+└── .github/workflows/    # CI: lint + build
 ```
 
 ## 🔧 Key Components
 
-### 1. Background Script (`background.js`)
+### 1. Background script (`background.js`)
 
-**Purpose:** Orchestrates the summarization flow — finds or opens a Gemini tab, injects the content script, and dispatches the URL + prompt.
+A **non-persistent MV3 event page** (`background.scripts`, not a service worker — Firefox does not require one). It orchestrates the whole flow.
 
-**Key Functions:**
+**Entry points:**
 
-- `processAndPasteInGemini(url)` — Entry point. Reads prompt from storage, resolves target Gemini tab, triggers paste.
-- `executeAndSendMessage(tabId, text)` — Pings content script to check if alive; injects `content.js` if not; sends paste message.
+- `browser.action.onClicked` — validates the active tab's URL against `YOUTUBE_PATTERNS`, then calls `summarize(url)`.
+- `browser.contextMenus.onClicked` — same, for the link and page menu items. The whole context-menu block is guarded by `if (browser.contextMenus)` because the API is unavailable on Firefox for Android.
 
-**Pending summary flow:**  
-If the Gemini tab is still loading, the text is stored in `browser.storage.session` under `pendingSummaries[tabId]`. The `tabs.onUpdated` listener picks it up once the tab reaches `complete`.
+**`summarize(url)`** builds the text (`url` + two newlines + the stored prompt) and picks a target tab:
 
-### 2. Content Script (`content.js`)
+- If an open Gemini tab matches `GEMINI_HOME_URL` (the blank `/app` new-chat view, with or without query parameters), it is focused and messaged directly with `tabs.sendMessage`. Tabs showing an active thread (`/app/<id>`) are deliberately skipped so an in-progress conversation is never destroyed.
+- Otherwise a new tab is opened and the text is queued as a **handoff**.
 
-**Purpose:** Injected into `gemini.google.com` tabs on demand. Finds the input element, pastes the text, and clicks Send.
+**Handoff mechanism:**
 
-**Injection guard:**  
-`window.geminiSummarizerInjected` prevents double-registration when the script is injected into an already-active tab.
+A handoff is a `{ text, at }` record stored in `browser.storage.local` under `handoffs`, keyed by the target tab id. Storage (rather than a variable) is required because the event page can be suspended between tab creation and tab load. Stale entries are pruned on every write, when the target tab closes (`tabs.onRemoved`), and by `HANDOFF_TTL_MS`.
 
-**Message handlers:**
+A handoff is reached from two directions, so neither side has to win a race:
 
-- `ping` — Returns `{ ok: true }` synchronously. Background uses this to check if the listener is alive.
-- `pasteUrlToActiveElement` — Polls for Gemini's input element (up to 10s), pastes text via `execCommand('insertText')`, then polls for the Send button (up to 3s) before falling back to an Enter keypress.
+- **Pull** — the content script sends `claimHandoff` on load; the background script resolves the tab id from `sender.tab.id`. Its arrival proves the content script is listening, so the handoff is consumed outright (`takeHandoff`).
+- **Push** — `tabs.onUpdated` (filtered to Gemini URLs and the `status` property) delivers on `complete`. This path **peeks** and only deletes the handoff after `tabs.sendMessage` resolves, because a tab can report `complete` before the content script has registered its listener. A failed push is expected and silent; the handoff stays put for the pull.
+
+Every read and delete goes through `enqueue()`, a promise chain that serializes them and never rejects, so a handoff is consumed at most once even when both paths fire simultaneously. Entries older than `HANDOFF_TTL_MS` (120s) are discarded rather than pasted, so a tab closed before it loaded cannot surprise the user later.
+
+**Never trigger delivery from the `status` of a freshly created tab alone.** `tabs.get()` immediately after `tabs.create()` can report `complete` for the tab's initial blank state — doing so pastes into a tab that has no content script yet. `summarize()` only makes that call as a late safety net, and gates it on the URL as well as the status.
+
+**Keying by tab id is the point:** a handoff can only ever be delivered to the tab it was created for. Nothing is broadcast.
+
+### 2. Content script (`content.js`)
+
+Declared in the manifest for `https://gemini.google.com/*` at `document_idle`. It is never injected programmatically, so no `scripting` permission is needed.
+
+> **Firefox MV3 gotcha — read this before debugging "nothing pastes".**
+> Firefox treats `host_permissions` as **optional and revocable**, and a manifest-declared content
+> script **does not run at all** until its host permission is granted
+> ([bug 1745819](https://bugzilla.mozilla.org/show_bug.cgi?id=1745819)). Firefox 127+ grants them
+> during a normal install, but a **temporary add-on loaded from `about:debugging` has no install
+> prompt, so nothing is granted** — the extension then fails completely silently: tabs open, no API
+> reports an error, and every `tabs.sendMessage` fails with *"Could not establish connection.
+> Receiving end does not exist."*
+>
+> `ensureGeminiAccess()` in `background.js` handles this by calling `permissions.request()`.
+> **`permissions.request()` must be the first `await` in the gesture handler.** Awaiting anything
+> before it — `permissions.contains()` included — ends the user input context, and Firefox rejects
+> with *"permissions.request may only be called from a user input handler"*. That is why
+> `action.onClicked` has a synchronous fast path for the common case where `tab.url` is already
+> known. `permissions.request()` resolves `true` without prompting when access is already granted,
+> so calling it every time is safe.
+>
+> Note that **reloading a temporary add-on can drop granted optional permissions**, so it may need
+> re-granting after each reload during development. To fix it by hand:
+> `about:addons` → the extension → Permissions → enable access for `gemini.google.com`, then reload
+> any Gemini tab that was already open (granting only affects subsequent page loads).
+
+- `pastePrompt(text)` polls for Gemini's input element (`INPUT_SELECTOR`, up to 10s), writes the text with `document.execCommand('insertText')`, and dispatches an `input` event so Gemini's framework registers the change.
+- **It does not submit.** The prompt is left filled and focused for the user to review, edit, and send. This is a deliberate product decision — do not add auto-send.
+- A `generation` counter makes each request supersede any earlier one still polling, so a second summarize during the 10s window wins instead of being silently dropped.
+- If the input never appears, it sends `pasteFailed` to the background script, which shows a notification.
+
+`execCommand` is deprecated, but it remains the only reliable way to write into Gemini's rich-text editor such that the app registers the change. Do not "modernize" it without testing against the live UI.
 
 ### 3. Config (`config.js`)
 
-**Purpose:** Defines `defaultPromptText`. Loaded before both `background.js` and `options.js` (see manifest `background.scripts` order and `options.html` script tag order).
+Defines `defaultPromptText`. Loaded before both `background.js` (see the `background.scripts` order in the manifest) and `options.js` (see the script tag order in `options.html`).
 
-### 4. Options Page (`options.html` / `options.js`)
+### 4. Options page (`options.html` / `options.js`)
 
-**Purpose:** Lets users view and edit the prompt. Saves to `browser.storage.local` under the key `promptText`.
+Loads, saves, and resets the prompt in `browser.storage.local` under `promptText`.
 
 ## 🧪 Testing Your Changes
 
-### Manual Testing
+### Automated checks
 
-After making changes:
+```bash
+bun run lint      # Biome (lint + format) and web-ext lint — both must be clean
+bun run build     # Produces web-ext-artifacts/<name>-<version>.zip
+```
 
-1. Go to `about:debugging#/runtime/this-firefox`
-2. Click "Reload" next to the extension
-3. Navigate to a YouTube video
-4. Click the toolbar icon or use the right-click context menu
-5. Verify Gemini tab opens/focuses and the prompt is pasted and sent
-6. Check the background console for any errors
+CI runs the same two commands on every push and pull request, plus a check that `manifest.json` and `package.json` versions match.
 
-### Testing Checklist
+### Manual testing
 
-See [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md) for a comprehensive step-by-step guide covering all features and edge cases.
+1. `about:debugging#/runtime/this-firefox` → "Reload" next to the extension
+2. Work through [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md)
+3. Check the background console for errors
 
 ## 📦 Building for Distribution
 
-### 1. Prepare for Release
+1. **Bump the version** in **both** `manifest.json` and `package.json` (CI fails if they diverge).
+2. **Run the full checklist** in [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md).
+3. **Build the package:**
 
-**Update Version:**
+   ```bash
+   bun run build
+   ```
 
-```json
-// manifest.json
-"version": "1.1.0"  // Increment version
-```
+   `web-ext-config.mjs` keeps dev files (`package.json`, `biome.json`, lockfiles, Markdown, CI config) out of the archive. Verify with `unzip -l web-ext-artifacts/*.zip` — it should contain only the manifest, the four scripts, `options.html`, `icon.svg`, and `LICENSE`.
 
-**Test Thoroughly:**
-
-- Run the full [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md)
-- Test on the minimum supported Firefox version (150)
-
-### 2. Create Release Package
-
-Create a ZIP excluding dev files:
-
-```bash
-zip -r quick-youtube-summary-with-gemini-v1.1.0.zip . \
-  -x "*.git*" \
-  -x "*node_modules*"
-```
-
-### 3. Submit to Mozilla Add-ons (AMO)
-
-1. Go to: https://addons.mozilla.org/developers/
-2. Upload the ZIP file
-3. Fill in metadata:
-   - Name: Quick YouTube Summary with Gemini
-   - Summary: Summarizes YouTube videos using Google Gemini in one click
-   - Description: See README.md
-   - Categories: Productivity, Social & Communication
-4. Choose visibility:
-   - **Listed:** Public (everyone can find it)
-   - **Unlisted:** Only you and people with the link
-5. Submit for review
-6. Wait 1–3 days for approval
+4. **Submit to AMO:**
+   - <https://addons.mozilla.org/developers/>
+   - Upload the ZIP, fill in the metadata, and submit for review (typically 1–3 days).
+   - No source-code submission is required: there is no build step and nothing is minified.
 
 ## 🐛 Debugging Common Issues
 
-### Extension Not Loading
+### Extension will not load
 
-**Symptom:** Error when loading temporary add-on
+- Validate `manifest.json` (`bun run lint` covers this via `web-ext lint`)
+- Confirm every referenced file exists: `background.js`, `content.js`, `config.js`, `options.html`, `options.js`, `icon.svg`
 
-**Solutions:**
+### Prompt is not pasted
 
-- Check `manifest.json` is valid JSON
-- Verify all referenced files exist (`background.js`, `content.js`, `config.js`, all icons)
-- Check the browser console for specific error messages
+1. Open the background console (`about:debugging` → Inspect)
+2. Confirm the target tab actually received a `pastePrompt` message
+3. If it did, Gemini's DOM probably changed — update `INPUT_SELECTOR` in `content.js`
 
-### Prompt Not Pasting / Send Not Triggered
+### Handoff never arrives in a new tab
 
-**Symptom:** Gemini tab opens but nothing happens
-
-**Debug Steps:**
-
-1. Open the extension's background console (`about:debugging` → Inspect)
-2. Look for warnings or errors logged as `Quick YouTube Summary with Gemini:`
-3. Check if Gemini's UI has changed its input selectors — update the `document.querySelector` call in `content.js` if needed
-
-### Pending Summary Not Firing
-
-**Symptom:** New Gemini tab opens but prompt never pastes after load
-
-**Debug Steps:**
-
-1. Open the background console
-2. Check `browser.storage.session` for a stale `pendingSummaries` entry
-3. Verify `tabs.onUpdated` is firing by checking for log output
+1. Inspect `browser.storage.local` for a stale `handoffs` entry
+2. Confirm `tabs.onUpdated` fires for the tab (the filter is limited to `https://gemini.google.com/*` and `status`)
+3. Confirm the content script is running in that tab (it is declarative, so it will not exist in tabs opened before the extension was installed or reloaded)
 
 ## 🔐 Security Best Practices
 
-### When Contributing
-
 **DO:**
 
-- ✅ Minimize permissions requested
+- ✅ Keep permissions minimal — every entry in `permissions` must be provably used
 - ✅ Use `textContent` instead of `innerHTML`
-- ✅ Validate all data from storage
+- ✅ Validate all data read back from storage
 
 **DON'T:**
 
 - ❌ Add external network requests
-- ❌ Store sensitive user data
-- ❌ Use `eval()` or `innerHTML` with user-controlled input
+- ❌ Store or transmit user data
+- ❌ Use `eval()` or `new Function()`
 - ❌ Expand `host_permissions` beyond `gemini.google.com`
+- ❌ Broadcast prompt text to every Gemini tab
 
-### Code Review Checklist
+### Code review checklist
 
-Before submitting a PR:
-
-- [ ] No new permissions added (unless absolutely necessary and justified)
+- [ ] No new permissions (unless justified in the PR description)
 - [ ] No external network requests introduced
 - [ ] No user data collected or transmitted
-- [ ] All user input sanitized
+- [ ] `bun run lint` is clean
+- [ ] `strict_min_version` is still `153.0` or higher
 
 ## 📝 Coding Standards
 
-### JavaScript Style
+Formatting is enforced by Biome (`biome.json`) — single quotes, semicolons, 2-space indent, 100-column lines. Run `bun run lint:fix` before committing rather than formatting by hand.
 
 ```javascript
-// Use const by default, let when reassignment needed
-const storageData = await browser.storage.local.get({ promptText: defaultPromptText });
+// const by default, let only when reassignment is needed
+const { promptText = defaultPromptText } = await browser.storage.local.get({
+  promptText: defaultPromptText,
+});
 
-// Use arrow functions for callbacks
+// Arrow functions for callbacks
 patterns.some(pattern => pattern.test(url));
 
-// Use async/await instead of raw promises
-async function processAndPasteInGemini(url) {
-  const data = await browser.storage.local.get({ promptText: defaultPromptText });
-  // ...
-}
+// async/await over raw promise chains
+async function summarize(url) { /* ... */ }
 ```
 
-### Error Handling
+Error handling: swallow only errors that are genuinely expected, and say why in a comment.
 
 ```javascript
 try {
-  await browser.tabs.sendMessage(tabId, { action: 'ping' });
+  await browser.windows.update(home.windowId, { focused: true });
 } catch {
-  // No listener — inject fresh content.js
-  await browser.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+  // windows is unavailable on Firefox for Android.
 }
 ```
 
 ## 🤝 Contributing
 
-### How to Contribute
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-new-feature`
+3. Make your changes
+4. Run `bun run lint` and the manual checklist
+5. Commit with a clear message
+6. Push and open a pull request
 
-1. **Fork Repository**
-2. **Create Feature Branch**
-
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-3. **Make Changes**
-4. **Test Thoroughly** (see TESTING-CHECKLIST.md)
-5. **Commit with Clear Messages**
-
-   ```bash
-   git commit -m "feat: Add statistics tracking"
-   ```
-
-6. **Push to Fork**
-7. **Open Pull Request**
-
-### Commit Message Format
+### Commit message format
 
 ```text
 type(scope): Subject
@@ -258,42 +258,25 @@ Body (optional)
 Footer (optional)
 ```
 
-**Types:**
-
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `style`: Code style (formatting)
-- `refactor`: Code refactoring
-- `test`: Adding tests
-- `chore`: Maintenance
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 **Examples:**
 
 ```text
 feat(options): Add prompt character count indicator
 fix(content): Update Gemini input selector after UI change
-docs(readme): Add troubleshooting section
+docs(readme): Correct the auto-send description
 ```
 
 ## 📚 Resources
 
-### WebExtensions API
-
 - [MDN WebExtensions](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions)
-- [browser.* API Reference](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API)
-- [Manifest V3 Migration Guide](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/)
-
-### Tools
-
-- [web-ext](https://github.com/mozilla/web-ext) — CLI tool for extension development and signing
-- [Firefox DevTools](https://firefox-source-docs.mozilla.org/devtools-user/)
-- [Extension Workshop](https://extensionworkshop.com/) — Mozilla's official guide
-
-### Community
-
+- [browser.\* API reference](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API)
+- [Manifest V3 migration guide](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/)
+- [web-ext command reference](https://extensionworkshop.com/documentation/develop/web-ext-command-reference/)
+- [Biome](https://biomejs.dev/)
 - [Mozilla Add-ons Community](https://discourse.mozilla.org/c/add-ons/)
-- Project Issues: https://github.com/LabinatorSolutions/quick-youtube-summary-with-gemini/issues
+- Project issues: <https://github.com/LabinatorSolutions/quick-youtube-summary-with-gemini/issues>
 
 ## 🙏 Credits
 
@@ -301,5 +284,5 @@ Contributors are recognized in the GitHub contributors list.
 
 Special thanks to:
 
-- Mozilla Firefox team for the WebExtensions API
-- Open-source community for inspiration
+- The Mozilla Firefox team for the WebExtensions API
+- The open-source community for inspiration

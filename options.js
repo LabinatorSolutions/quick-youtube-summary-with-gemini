@@ -22,22 +22,27 @@ function showStatus(success, message) {
 
 function saveOptions() {
   const prompt = document.getElementById('prompt').value;
-  browser.storage.local.set({
-    promptText: prompt
-  }).then(() => {
-    showStatus(true);
-  }).catch((err) => {
-    console.error('Quick YouTube Summary with Gemini: Failed to save options.', err);
-    showStatus(false, 'Save failed');
-  });
+  browser.storage.local
+    .set({
+      promptText: prompt,
+    })
+    .then(() => {
+      showStatus(true);
+    })
+    .catch(err => {
+      console.error('Quick YouTube Summary with Gemini: Failed to save options.', err);
+      showStatus(false, 'Save failed');
+    });
 }
 
 function restoreOptions() {
-  browser.storage.local.get({
-    promptText: defaultPromptText
-  }).then((result) => {
-    document.getElementById('prompt').value = result.promptText;
-  });
+  browser.storage.local
+    .get({
+      promptText: defaultPromptText,
+    })
+    .then(result => {
+      document.getElementById('prompt').value = result.promptText;
+    });
 }
 
 function resetOptions() {

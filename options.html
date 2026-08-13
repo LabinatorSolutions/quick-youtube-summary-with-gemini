@@ -232,10 +232,6 @@
       color: var(--error);
     }
 
-    .status.error .status-icon {
-      background-color: var(--error);
-    }
-
     .status-icon {
       width: 18px;
       height: 18px;
@@ -246,6 +242,10 @@
       align-items: center;
       justify-content: center;
       font-size: 10px;
+    }
+
+    .status.error .status-icon {
+      background-color: var(--error);
     }
   </style>
 </head>
@@ -271,8 +271,8 @@
         </div>
         
         <div class="button-group">
-          <button id="reset">Reset Default</button>
-          <button id="save">Save Changes</button>
+          <button type="button" id="reset">Reset Default</button>
+          <button type="button" id="save">Save Changes</button>
         </div>
       </div>
     </div>

@@ -2,11 +2,17 @@
 
 ## Supported Versions
 
-Use the latest version of the extension to ensure you have the most up-to-date security fixes.
+Only the latest release receives security fixes. Update the extension — and Firefox itself — to
+stay supported.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0     | :white_check_mark: |
+| 1.7.x   | :white_check_mark: |
+| < 1.7   | :x:                |
+
+The extension requires **Firefox 153 or newer**. Older Firefox releases carry known, unpatched
+vulnerabilities; the `strict_min_version` floor is a deliberate security decision, not an
+oversight.
 
 ## Reporting a Vulnerability
 

@@ -19,11 +19,17 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
 ## Features
 
 - ✅ **One-Click Summaries** - Send the current YouTube video directly to Gemini via the toolbar button or right-click context menu.
+- ✅ **You Stay in Control** - The prompt is pasted and focused, never sent automatically. Review or edit it, then press Enter yourself.
 - ✅ **Customizable Prompt** - Fully editable prompt template in the extension options (with Dark Mode support).
-- ✅ **Smart Tab Management** - Reuses your existing Gemini tab instead of opening a new one every time.
+- ✅ **Conversation-Safe Tab Reuse** - Reuses an existing Gemini tab only when it is sitting on the blank new-chat view. A tab with an active conversation is never touched; a fresh tab is opened instead.
 - ✅ **Robust DOM Interaction** - Reliable polling mechanism to interact with Gemini's rich-text interface.
 - ✅ **Privacy First** - Everything stays local. No telemetry, no external API calls, just native browser APIs.
 - ✅ **Lightweight** - Minimal background footprint utilizing a non-persistent Manifest V3 background script.
+
+## Requirements
+
+- Firefox 153 or newer (desktop or Android). Older releases are unsupported and carry known security vulnerabilities — update your browser.
+- An active Google account signed in to `gemini.google.com`.
 
 ## Installation
 
@@ -54,10 +60,10 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
    - Click the extension icon in your toolbar (or browser menu on Android), OR
    - Right-click anywhere on the page and select "Summarize with Gemini" (desktop only).
 
-3. **Enjoy the Magic**
-   - The extension will automatically switch to your Gemini tab (or open one if it doesn't exist).
-   - It will securely paste the video URL and your custom prompt into the input field.
-   - It will automatically trigger the "Send" button.
+3. **Review and Send**
+   - The extension switches to a Gemini tab that is on the blank new-chat view, or opens a new tab if every open Gemini tab has an active conversation.
+   - It pastes the video URL and your custom prompt into the input field and leaves the cursor there.
+   - **Nothing is submitted for you.** Read the prompt, edit it if you want, then press Enter or click Send.
 
 4. **Customizing the Prompt**
    - Right-click the extension icon and select "Manage Extension" -> "Options".
@@ -66,15 +72,20 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
 
 ## 🔧 Troubleshooting
 
-### Extension Not Working
+### Nothing happens when I click the button
 
-**Issue:** Clicking the button does nothing.
+1. Ensure you are viewing a valid YouTube video (`youtube.com/watch?v=...`, `youtu.be/...`, or a Short). The extension shows a notification when the current page is not a YouTube video.
+2. Check that you are logged into Gemini.
+3. **Check the Gemini permission.** Firefox treats host access as optional and revocable: open `about:addons` → this extension → **Permissions** and make sure *Access your data for gemini.google.com* is enabled. Without it Firefox blocks the content script that does the pasting, so a tab opens and nothing is pasted. The extension asks for this permission the first time you use it; if you declined, re-enable it here. Reload any Gemini tab that was already open.
+4. The extension waits up to 10 seconds for Gemini's prompt box to appear. If it never does, a notification says so — reload the Gemini tab and try again.
 
-**Solutions:**
+### The prompt was pasted but nothing was sent
 
-1. Ensure you are currently viewing a valid YouTube video (`youtube.com/watch?v=...` or `youtu.be/...`).
-2. Check if you are logged into Gemini.
-3. The extension navigates Gemini to a fresh page and waits up to 10 seconds for the interface to load. If Gemini is slow to start, wait a moment and try again.
+That is intended. The extension deliberately stops after pasting so you can review and edit the prompt. Press Enter or click Send yourself.
+
+### It opened a new tab instead of using my existing Gemini tab
+
+Also intended. A Gemini tab showing an active conversation is left alone so an in-progress chat is never disrupted. Only a tab on the blank new-chat view is reused.
 
 ## Privacy Policy
 
@@ -89,14 +100,17 @@ This extension is committed to your privacy:
 
 The extension requests:
 
-| Permission                                | Purpose                                            |
-| ----------------------------------------- | -------------------------------------------------- |
-| `activeTab`                               | Read the current YouTube tab URL                   |
-| `storage`                                 | Save your custom prompt and pass it to Gemini      |
-| `tabs`                                    | Find and switch to an existing Gemini tab          |
-| `notifications`                           | Show error feedback (e.g. not a YouTube page)      |
-| `contextMenus`                            | Add the right-click option (desktop only)          |
-| `https://gemini.google.com/*`             | Find existing Gemini tabs and navigate to them     |
+| Permission                    | Purpose                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `storage`                     | Save your custom prompt (local) and hand the pending prompt to a new tab (session) |
+| `tabs`                        | Read the current tab's URL, find Gemini tabs, and switch to them                   |
+| `notifications`               | Show error feedback (e.g. not a YouTube page)                                      |
+| `contextMenus`                | Add the right-click option (desktop only)                                          |
+| `https://gemini.google.com/*` | Find existing Gemini tabs and paste into them                                      |
+
+Firefox treats the `gemini.google.com` host access as optional — you can revoke it at any time in `about:addons` → Permissions. The extension cannot paste without it and will ask for it on first use.
+
+No host permission is requested for YouTube: the extension only reads the active tab's URL, and never injects code into or reads content from YouTube pages.
 
 ## 🛠️ Development
 
@@ -111,7 +125,22 @@ quick-youtube-summary-with-gemini/
 ├── options.html                     # Options page UI
 ├── options.js                       # Options page logic
 ├── icon.svg                         # Extension icon (all sizes)
-└── README.md                        # This file
+├── package.json                     # Dev tooling only — the extension itself ships no dependencies
+├── biome.json                       # Biome linter/formatter configuration
+├── web-ext-config.mjs               # Packaging exclusions for web-ext
+└── .github/workflows/ci.yml         # Lint + build on every push and pull request
+```
+
+### Commands
+
+The extension is plain JavaScript with **no build step** — Firefox loads the source files directly. The tooling below only lints and packages it.
+
+```bash
+bun install       # Install dev tooling (Biome + web-ext)
+bun run lint      # Biome check + web-ext lint
+bun run lint:fix  # Apply Biome's safe fixes, then lint
+bun run start     # Launch Firefox with the extension loaded
+bun run build     # Package into web-ext-artifacts/
 ```
 
 ## Contributing

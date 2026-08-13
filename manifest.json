@@ -1,20 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Quick YouTube Summary with Gemini",
-  "version": "1.6",
+  "version": "1.7.0",
   "author": "Labinator",
   "developer": {
     "name": "Labinator",
     "url": "https://labinator.com/"
   },
   "description": "Summarizes the Youtube video using Google Gemini",
-  "permissions": [
-    "activeTab",
-    "contextMenus",
-    "notifications",
-    "storage",
-    "tabs"
-  ],
+  "permissions": ["contextMenus", "notifications", "storage", "tabs"],
   "content_scripts": [
     {
       "matches": ["https://gemini.google.com/*"],
@@ -22,9 +16,7 @@
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": [
-    "https://gemini.google.com/*"
-  ],
+  "host_permissions": ["https://gemini.google.com/*"],
   "action": {
     "default_title": "Summarize with Gemini",
     "default_icon": {
@@ -34,10 +26,7 @@
     }
   },
   "background": {
-    "scripts": [
-      "config.js",
-      "background.js"
-    ]
+    "scripts": ["config.js", "background.js"]
   },
   "options_ui": {
     "page": "options.html",
@@ -51,7 +40,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "quick-youtube-summary-with-gemini@labinator.com",
-      "strict_min_version": "150.0",
+      "strict_min_version": "153.0",
       "data_collection_permissions": {
         "required": ["none"],
         "optional": []

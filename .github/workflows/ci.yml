@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check manifest and package versions match
+        run: |
+          manifest=$(bun -e "console.log(require('./manifest.json').version)")
+          pkg=$(bun -e "console.log(require('./package.json').version)")
+          echo "manifest.json: $manifest / package.json: $pkg"
+          [ "$manifest" = "$pkg" ]
+
+      - name: Lint (Biome + web-ext)
+        run: bun run lint
+
+      - name: Build package
+        run: bun run build
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: extension-package
+          path: web-ext-artifacts/*.zip
+          if-no-files-found: error
