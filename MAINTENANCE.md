@@ -58,15 +58,16 @@ in the same release would strand them on the broken version.
 
 1. Bump `"version"` in **both** `manifest.json` and `package.json` (CI enforces that they match)
 2. Update the "Supported Versions" table in [SECURITY.md](./SECURITY.md)
-3. Run `bun run lint`
-4. Work through [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md) in full
-5. Build the package:
+3. Add an entry to [CHANGELOG.md](./CHANGELOG.md)
+4. Run `bun run lint`
+5. Work through [TESTING-CHECKLIST.md](./TESTING-CHECKLIST.md) in full
+6. Build the package:
 
    ```bash
    bun run build
    ```
 
-6. Upload `web-ext-artifacts/*.zip` to the [AMO Developer Hub](https://addons.mozilla.org/developers/)
+7. Upload `web-ext-artifacts/*.zip` to the [AMO Developer Hub](https://addons.mozilla.org/developers/)
 7. Tag the release in git
 
 No source-code submission is needed on AMO: nothing is minified, bundled, or generated.
