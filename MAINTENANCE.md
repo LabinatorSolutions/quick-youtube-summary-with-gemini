@@ -68,6 +68,6 @@ in the same release would strand them on the broken version.
    ```
 
 7. Upload `web-ext-artifacts/*.zip` to the [AMO Developer Hub](https://addons.mozilla.org/developers/)
-7. Tag the release in git
+8. Tag the release in git
 
 No source-code submission is needed on AMO: nothing is minified, bundled, or generated.
