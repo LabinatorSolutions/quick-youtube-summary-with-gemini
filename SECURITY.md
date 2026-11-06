@@ -10,7 +10,7 @@ stay supported.
 | 1.7.x   | :white_check_mark: |
 | < 1.7   | :x:                |
 
-The extension requires **Firefox 153 or newer**. Older Firefox releases carry known, unpatched
+The extension requires **Firefox 159 or newer**. Older Firefox releases carry known, unpatched
 vulnerabilities; the `strict_min_version` floor is a deliberate security decision, not an
 oversight.
 

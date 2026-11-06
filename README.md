@@ -28,7 +28,7 @@ This extension provides a seamless bridge between YouTube and Google Gemini. Ins
 
 ## Requirements
 
-- Firefox 153 or newer (desktop or Android). Older releases are unsupported and carry known security vulnerabilities — update your browser.
+- Firefox 159 or newer (desktop or Android). Older releases are unsupported and carry known security vulnerabilities — update your browser.
 - An active Google account signed in to `gemini.google.com`.
 
 ## Installation

@@ -14,7 +14,7 @@ Load the build under test with `bun run start`, or via `about:debugging#/runtime
 - [ ] `unzip -l web-ext-artifacts/*.zip` contains only: `manifest.json`, `background.js`,
       `content.js`, `config.js`, `options.html`, `options.js`, `icon.svg`, `LICENSE`
 - [ ] `manifest.json` and `package.json` declare the same version
-- [ ] `strict_min_version` is `153.0` or higher
+- [ ] `strict_min_version` is `159.0` or higher
 
 ## Host permission
 

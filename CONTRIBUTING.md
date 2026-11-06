@@ -6,7 +6,7 @@ Guide for developers who want to modify, improve, or contribute to Quick YouTube
 
 ### Prerequisites
 
-- Firefox 153 or newer
+- Firefox 159 or newer
 - [Bun](https://bun.sh/) (for the dev tooling only — the extension itself has no runtime dependencies)
 - Git
 - Basic knowledge of:
@@ -210,7 +210,7 @@ CI runs the same two commands on every push and pull request, plus a check that 
 - [ ] No external network requests introduced
 - [ ] No user data collected or transmitted
 - [ ] `bun run lint` is clean
-- [ ] `strict_min_version` is still `153.0` or higher
+- [ ] `strict_min_version` is still `159.0` or higher
 
 ## 📝 Coding Standards
 

@@ -50,7 +50,7 @@ They serve different APIs and use different syntax, so they must be edited toget
 
 ### Firefox minimum version
 
-`strict_min_version` is `153.0` and should track current Firefox. Raise it in a release of its own
+`strict_min_version` is `159.0` and should track current Firefox. Raise it in a release of its own
 rather than alongside a bug fix — users below the new floor stop receiving updates, so raising it
 in the same release would strand them on the broken version.
 

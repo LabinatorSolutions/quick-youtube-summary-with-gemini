@@ -1,6 +1,6 @@
 {
   "name": "quick-youtube-summary-with-gemini",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "Firefox extension that sends the current YouTube video to Google Gemini with a customizable prompt.",
   "license": "AGPL-3.0-or-later",
@@ -18,7 +18,7 @@
     "sign": "web-ext sign --channel=listed"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.8",
-    "web-ext": "^10.6.0"
+    "@biomejs/biome": "^2.6.5",
+    "web-ext": "^10.8.0"
   }
 }
